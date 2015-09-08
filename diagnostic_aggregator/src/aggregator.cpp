@@ -51,19 +51,18 @@ Aggregator::Aggregator() :
     base_path_ = "/" + base_path_;
 
   nh.param("pub_rate", pub_rate_, pub_rate_);
-    
+
   analyzer_group_ = new AnalyzerGroup();
-  
+
   if (!analyzer_group_->init(base_path_, nh))
   {
     ROS_ERROR("Analyzer group for diagnostic aggregator failed to initialize!");
   }
-  
 
   // Last analyzer handles remaining data
   other_analyzer_ = new OtherAnalyzer();
   other_analyzer_->init(base_path_); // This always returns true
-
+  add_srv_ = n_.advertiseService("/diagnostics_agg/add_diagnostics", &Aggregator::addDiagnostics, this);
   diag_sub_ = n_.subscribe("/diagnostics", 1000, &Aggregator::diagCallback, this);
   agg_pub_ = n_.advertise<diagnostic_msgs::DiagnosticArray>("/diagnostics_agg", 1);
   toplevel_state_pub_ = n_.advertise<diagnostic_msgs::DiagnosticStatus>("/diagnostics_toplevel_state", 1);
@@ -92,7 +91,7 @@ void Aggregator::checkTimestamp(const diagnostic_msgs::DiagnosticArray::ConstPtr
 
 void Aggregator::diagCallback(const diagnostic_msgs::DiagnosticArray::ConstPtr& diag_msg)
 {
-  checkTimestamp(diag_msg);  
+  checkTimestamp(diag_msg);
 
   bool analyzed = false;
   for (unsigned int j = 0; j < diag_msg->status.size(); ++j)
@@ -107,11 +106,75 @@ void Aggregator::diagCallback(const diagnostic_msgs::DiagnosticArray::ConstPtr& 
   }
 }
 
-Aggregator::~Aggregator() 
+Aggregator::~Aggregator()
 {
   if (analyzer_group_) delete analyzer_group_;
 
   if (other_analyzer_) delete other_analyzer_;
+}
+
+
+void Aggregator::bondBroken()
+{
+  boost::mutex::scoped_lock lock(mutex_); // Possibility of multiple bonds breaking at once
+
+  vector<boost::shared_ptr<bond::Bond> >::iterator it;
+  for (it = bonds_.begin(); it != bonds_.end();)
+  {
+    if ((*it)->isBroken())
+    {
+      string id = (*it)->getId();
+      ROS_DEBUG("bond for namespace %s was broken", id.c_str());
+      analyzer_group_->removeAnalyzer(added_analyzers_.find(id)->second);
+      added_analyzers_.erase(id);
+      bonds_.erase(it); // it points to next in list (or end())
+    } else {
+      // increment in afterthought will go past bonds_.end() if erase()ing last
+      // element, so do it here instead
+      ++it;
+    }
+  }
+}
+
+void Aggregator::bondFormed(){}
+
+bool Aggregator::addDiagnostics(diagnostic_msgs::AddDiagnostics::Request &req,
+				diagnostic_msgs::AddDiagnostics::Response &res)
+{
+  // Wait for connections on this bond. Wait until it's formed to put it in the
+  // bond vector
+  ROS_DEBUG("got load request for namespace %s", req.load_namespace.c_str());
+  // rebuff attempts to add things from the same namespace twice
+  if (added_analyzers_.find(req.load_namespace) != added_analyzers_.end()) {
+    res.message = "requested load from namespace " + req.load_namespace + " which is already in use";
+    res.success = false;
+    return true;
+  }
+
+  boost::shared_ptr<bond::Bond> req_bond = boost::make_shared<bond::Bond>(
+    "/diagnostics_agg_bond", req.load_namespace,
+    boost::function<void(void)>(boost::bind(&Aggregator::bondBroken, this)),
+    boost::function<void(void)>(boost::bind(&Aggregator::bondFormed, this))
+    );
+  req_bond->start();
+
+  boost::shared_ptr<Analyzer> group(new AnalyzerGroup());
+
+  bonds_.push_back(req_bond); // bond formed, keep track of it
+
+  if (group->init(base_path_, req.load_namespace))
+  {
+    analyzer_group_->addAnalyzer(group);
+    added_analyzers_.insert(pair<string, boost::shared_ptr<Analyzer> >(req.load_namespace, group));
+    res.message = "successfully added AnalyzerGroup";
+    res.success = true;
+  }
+  else
+  {
+    res.message = "failed to initialise AnalyzerGroup";
+    res.success = false;
+  }
+  return true;
 }
 
 void Aggregator::publishData()
@@ -133,7 +196,7 @@ void Aggregator::publishData()
     if (processed[i]->level < min_level)
       min_level = processed[i]->level;
   }
- 
+
   vector<boost::shared_ptr<diagnostic_msgs::DiagnosticStatus> > processed_other = other_analyzer_->report();
   for (unsigned int i = 0; i < processed_other.size(); ++i)
   {

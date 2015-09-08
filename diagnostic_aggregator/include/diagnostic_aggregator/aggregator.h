@@ -45,9 +45,12 @@
 #include <vector>
 #include <set>
 #include <boost/shared_ptr.hpp>
+#include <boost/thread/mutex.hpp>
+#include <bondcpp/bond.h>
 #include <diagnostic_msgs/DiagnosticArray.h>
 #include <diagnostic_msgs/DiagnosticStatus.h>
 #include <diagnostic_msgs/KeyValue.h>
+#include <diagnostic_msgs/AddDiagnostics.h>
 #include "XmlRpcValue.h"
 #include "diagnostic_aggregator/analyzer.h"
 #include "diagnostic_aggregator/analyzer_group.h"
@@ -125,9 +128,11 @@ public:
 
 private:
   ros::NodeHandle n_;
+  ros::ServiceServer add_srv_; /**< AddDiagnostics, /diagnostics_agg/add_diagnostics */
   ros::Subscriber diag_sub_; /**< DiagnosticArray, /diagnostics */
   ros::Publisher agg_pub_;  /**< DiagnosticArray, /diagnostics_agg */
   ros::Publisher toplevel_state_pub_;  /**< DiagnosticStatus, /diagnostics_toplevel_state */
+  boost::mutex mutex_;
   double pub_rate_;
 
   /*!
@@ -135,9 +140,36 @@ private:
    */
   void diagCallback(const diagnostic_msgs::DiagnosticArray::ConstPtr& diag_msg);
 
+  /*!
+   *\brief Service request callback for addition of diagnostics.
+   * Creates a bond between the calling node and the aggregator, and loads
+   * information about new diagnostics into added_analyzers_, keeping track of
+   * the formed bond in bonds_
+   */
+  bool addDiagnostics(diagnostic_msgs::AddDiagnostics::Request &req,
+		      diagnostic_msgs::AddDiagnostics::Response &res);
+
   AnalyzerGroup* analyzer_group_;
 
   OtherAnalyzer* other_analyzer_;
+
+  std::vector<boost::shared_ptr<bond::Bond> > bonds_; /**< \brief Contains all bonds for additional diagnostics. */
+
+  /**
+   *!\brief called when a bond between the aggregator and a node is broken
+   *
+   * Modifies the contents of added_analyzers_ and analyzer_group, removing the
+   * diagnostics that had been brought up by that bond.
+   */
+  void bondBroken();
+
+  /**
+   *!\brief called when a bond is formed between the aggregator and a node
+   */
+  void bondFormed();
+
+  /**< \brief map of namespace, analyzer pairs which were added by external request. */
+  std::map<std::string, boost::shared_ptr<Analyzer> > added_analyzers_;
 
   std::string base_path_; /**< \brief Prepended to all status names of aggregator. */
 

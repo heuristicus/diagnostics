@@ -50,6 +50,11 @@ AnalyzerGroup::AnalyzerGroup() :
   analyzer_loader_("diagnostic_aggregator", "diagnostic_aggregator::Analyzer")
 { }
 
+bool AnalyzerGroup::init(const std::string base_path, const std::string namespc)
+{
+  return init(base_path, ros::NodeHandle(namespc));
+}
+
 bool AnalyzerGroup::init(const string base_path, const ros::NodeHandle &n)
 {
   n.param("path", nice_name_, string(""));
@@ -163,6 +168,23 @@ bool AnalyzerGroup::init(const string base_path, const ros::NodeHandle &n)
 AnalyzerGroup::~AnalyzerGroup()
 {
   analyzers_.clear();
+}
+
+bool AnalyzerGroup::addAnalyzer(boost::shared_ptr<Analyzer>& analyzer)
+{
+  analyzers_.push_back(analyzer);
+  return true;
+}
+
+bool AnalyzerGroup::removeAnalyzer(boost::shared_ptr<Analyzer>& analyzer)
+{
+  vector<boost::shared_ptr<Analyzer> >::iterator it = find(analyzers_.begin(), analyzers_.end(), analyzer);
+  if (it != analyzers_.end())
+  {
+    analyzers_.erase(it);
+    return true;
+  }
+  return false;
 }
 
 bool AnalyzerGroup::match(const string name)
