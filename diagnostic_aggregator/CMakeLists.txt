@@ -4,7 +4,6 @@ project(diagnostic_aggregator)
 
 # Load catkin and all dependencies required for this package
 find_package(catkin REQUIRED diagnostic_msgs pluginlib roscpp rospy rostest xmlrpcpp bondcpp bondpy)
-set(CMAKE_CXX_FLAGS "-g ${CMAKE_CXX_FLAGS}")
 catkin_package(DEPENDS diagnostic_msgs pluginlib roscpp rospy xmlrpcpp bondcpp bondpy
     INCLUDE_DIRS include
     LIBRARIES ${PROJECT_NAME})

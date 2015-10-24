@@ -6,7 +6,6 @@ import sys
 import optparse
 from bondpy import bondpy
 from diagnostic_msgs.srv import AddDiagnostics
-import roslib; roslib.load_manifest('rosparam')
 import rosparam
 import rospy
 
@@ -22,33 +21,34 @@ class AddAnalyzers:
     def add_analyzers(self, myargv):
         usage = """
     %prog allows you to dynamically add a group to the diagnostic aggregator,
-    which is automatically removed when this node dies.
+    which is automatically removed when this node dies. Analyzer configurations
+    can either be provided directly, or assumed that they are already can be
+    found on the ros parameter server (where roslaunch may have loaded them).
 
-    Usage: %prog [options] analyzer_yaml namespace
+    Usage: %prog [options] analyzer_yaml
 
-    analyzer_yaml contains the definitions for analyzers to be added to the
-                  aggregator
-
-    namespace     string defining the namespace into which to load parameters
-                  for reading by the aggregator.
+        analyzer_yaml - definitions for analyzers to be added to the aggregator
     """
         parser = optparse.OptionParser(usage=usage, prog=NAME)
         parser.add_option('-t', '--timeout', action='store', type='float', dest='timeout', default=None, help='time in seconds to wait for the diagnostic_agg service to come up before timing out. Default waits indefinitely')
         options, args = parser.parse_args(myargv[1:])
 
+        namespace = rospy.resolve_name(rospy.get_name())
+
         if len(args) == 0:
-            parser.error('Invalid arguments. You must specify a yaml file to load from and a namespace to load into')
-        elif len(args) == 1:
-            parser.error('Invalid arguments. You must specify a namespace into which to load parameters')
-        elif len(args) > 2:
+            # nothing to do - it will assume parameters are already loaded on the parameter server (usually via roslaunch)
+            pass
+        elif len(args == 1):
+            paramlist = rosparam.load_file(args[0], default_namespace=namespace)
+            for params, ns in paramlist:
+                rosparam.upload_params(ns, params)
+        elif len(args) > 1:
             parser.error('Too many arguments')
 
-        paramlist = rosparam.load_file(args[0])
-        namespace = args[1]
-        for params, ns in paramlist:
-            rosparam.upload_params(namespace + '/' + ns, params)
+        # very fugly having absolute references everywhere, but diagnostics nodes are already like this so can't be
+        # easily pushed down into namespaces anyway. No point in fighting it here.
 
-        self.bond = bondpy.Bond("/diagnostics_agg_bond", namespace)
+        self.bond = bondpy.Bond("/diagnostics_agg/bond", namespace)
         self.bond.start()
 
         try:
@@ -56,9 +56,9 @@ class AddAnalyzers:
             add_diagnostics = rospy.ServiceProxy('/diagnostics_agg/add_diagnostics', AddDiagnostics)
             resp = add_diagnostics(load_namespace=namespace)
             if resp.success:
-                rospy.loginfo('Successfully added analyzers to diagnostic aggregator')
+                rospy.loginfo(NAME + ' successfully added analyzers to diagnostic aggregator')
             else:
-                rospy.logerr('Did not add any analyzers to diagnostic aggregator: ' + resp.message)
+                rospy.logerr(NAME + ' did not add any analyzers to diagnostic aggregator: ' + resp.message)
                 rospy.signal_shutdown('')
         except rospy.service.ServiceException:
             rospy.logerr(NAME + ' service returned failure - missing aggregator or failed init of analyzer group?')
@@ -70,5 +70,5 @@ class AddAnalyzers:
         rospy.spin()
 
 if __name__ == '__main__':
-    rospy.init_node('add_analyzers')
+    rospy.init_node(NAME)
     AddAnalyzers(rospy.myargv())

@@ -141,8 +141,6 @@ void Aggregator::bondFormed(){}
 bool Aggregator::addDiagnostics(diagnostic_msgs::AddDiagnostics::Request &req,
 				diagnostic_msgs::AddDiagnostics::Response &res)
 {
-  // Wait for connections on this bond. Wait until it's formed to put it in the
-  // bond vector
   ROS_DEBUG("got load request for namespace %s", req.load_namespace.c_str());
   // rebuff attempts to add things from the same namespace twice
   if (added_analyzers_.find(req.load_namespace) != added_analyzers_.end()) {
@@ -152,7 +150,7 @@ bool Aggregator::addDiagnostics(diagnostic_msgs::AddDiagnostics::Request &req,
   }
 
   boost::shared_ptr<bond::Bond> req_bond = boost::make_shared<bond::Bond>(
-    "/diagnostics_agg_bond", req.load_namespace,
+    "/diagnostics_agg/bond", req.load_namespace,
     boost::function<void(void)>(boost::bind(&Aggregator::bondBroken, this)),
     boost::function<void(void)>(boost::bind(&Aggregator::bondFormed, this))
     );
@@ -162,7 +160,8 @@ bool Aggregator::addDiagnostics(diagnostic_msgs::AddDiagnostics::Request &req,
 
   bonds_.push_back(req_bond); // bond formed, keep track of it
 
-  if (group->init(base_path_, req.load_namespace))
+  std::cout << "Loading into namespace: " << req.load_namespace << std::endl;
+  if (group->init(base_path_, ros::NodeHandle(req.load_namespace)))
   {
     analyzer_group_->addAnalyzer(group);
     added_analyzers_.insert(pair<string, boost::shared_ptr<Analyzer> >(req.load_namespace, group));
