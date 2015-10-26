@@ -155,21 +155,26 @@ private:
 
   std::vector<boost::shared_ptr<bond::Bond> > bonds_; /**< \brief Contains all bonds for additional diagnostics. */
 
-  /**
+  /*
    *!\brief called when a bond between the aggregator and a node is broken
    *
    * Modifies the contents of added_analyzers_ and analyzer_group, removing the
    * diagnostics that had been brought up by that bond.
+   *!\param bond_id The bond id (namespace) from which the analyzer was created
+   *!\param analyzer Shared pointer to the analyzer group that was added
    */
-  void bondBroken();
+  void bondBroken(std::string bond_id,
+		  boost::shared_ptr<Analyzer> analyzer);
 
-  /**
-   *!\brief called when a bond is formed between the aggregator and a node
+  /*
+   *!\brief called when a bond is formed between the aggregator and a node.
+   * Actually adds the analyzergroup to the main analyzer group. Before this
+   * function is called, the added diagnostics will not be analyzed by the
+   * aggregator.
+   *!\param group Shared pointer to the analyzer group that is to be added,
+   *  which was created in the addDiagnostics function
    */
-  void bondFormed();
-
-  /**< \brief map of namespace, analyzer pairs which were added by external request. */
-  std::map<std::string, boost::shared_ptr<Analyzer> > added_analyzers_;
+  void bondFormed(boost::shared_ptr<Analyzer> group);
 
   std::string base_path_; /**< \brief Prepended to all status names of aggregator. */
 
@@ -180,6 +185,16 @@ private:
    */
   void checkTimestamp(const diagnostic_msgs::DiagnosticArray::ConstPtr& diag_msg);
 
+};
+
+/*
+ *!\brief Functor for checking whether a bond has the same ID as the given string
+ */
+struct BondIDMatch
+{
+  BondIDMatch(const std::string s) : s(s) {}
+  bool operator()(const boost::shared_ptr<bond::Bond>& b){ return s == b->getId(); }
+  const std::string s;
 };
 
 }

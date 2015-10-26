@@ -114,65 +114,60 @@ Aggregator::~Aggregator()
 }
 
 
-void Aggregator::bondBroken()
+void Aggregator::bondBroken(string bond_id, boost::shared_ptr<Analyzer> analyzer)
 {
   boost::mutex::scoped_lock lock(mutex_); // Possibility of multiple bonds breaking at once
-
-  vector<boost::shared_ptr<bond::Bond> >::iterator it;
-  for (it = bonds_.begin(); it != bonds_.end();)
+  ROS_DEBUG("Bond for namespace %s was broken", bond_id.c_str());
+  std::vector<boost::shared_ptr<bond::Bond> >::iterator elem;
+  elem = std::find_if(bonds_.begin(), bonds_.end(), BondIDMatch(bond_id));
+  if (elem == bonds_.end()){
+    ROS_WARN("Broken bond tried to erase a bond which didn't exist.");
+  } else {
+    bonds_.erase(elem);
+  }
+  if (!analyzer_group_->removeAnalyzer(analyzer))
   {
-    if ((*it)->isBroken())
-    {
-      string id = (*it)->getId();
-      ROS_DEBUG("bond for namespace %s was broken", id.c_str());
-      analyzer_group_->removeAnalyzer(added_analyzers_.find(id)->second);
-      added_analyzers_.erase(id);
-      bonds_.erase(it); // it points to next in list (or end())
-    } else {
-      // increment in afterthought will go past bonds_.end() if erase()ing last
-      // element, so do it here instead
-      ++it;
-    }
+    ROS_WARN("Broken bond tried to remove an analyzer which didn't exist.");
   }
 }
 
-void Aggregator::bondFormed(){}
+void Aggregator::bondFormed(boost::shared_ptr<Analyzer> group){
+  ROS_DEBUG("Bond formed");
+  analyzer_group_->addAnalyzer(group);
+}
 
 bool Aggregator::addDiagnostics(diagnostic_msgs::AddDiagnostics::Request &req,
 				diagnostic_msgs::AddDiagnostics::Response &res)
 {
-  ROS_DEBUG("got load request for namespace %s", req.load_namespace.c_str());
+  ROS_DEBUG("Got load request for namespace %s", req.load_namespace.c_str());
   // rebuff attempts to add things from the same namespace twice
-  if (added_analyzers_.find(req.load_namespace) != added_analyzers_.end()) {
-    res.message = "requested load from namespace " + req.load_namespace + " which is already in use";
+  if (std::find_if(bonds_.begin(), bonds_.end(), BondIDMatch(req.load_namespace)) != bonds_.end()) {
+    res.message = "Requested load from namespace " + req.load_namespace + " which is already in use";
     res.success = false;
     return true;
   }
 
+  boost::shared_ptr<Analyzer> group = boost::make_shared<AnalyzerGroup>();
   boost::shared_ptr<bond::Bond> req_bond = boost::make_shared<bond::Bond>(
     "/diagnostics_agg/bond", req.load_namespace,
-    boost::function<void(void)>(boost::bind(&Aggregator::bondBroken, this)),
-    boost::function<void(void)>(boost::bind(&Aggregator::bondFormed, this))
+    boost::function<void(void)>(boost::bind(&Aggregator::bondBroken, this, req.load_namespace, group)),
+    boost::function<void(void)>(boost::bind(&Aggregator::bondFormed, this, group))
     );
   req_bond->start();
-
-  boost::shared_ptr<Analyzer> group(new AnalyzerGroup());
-
   bonds_.push_back(req_bond); // bond formed, keep track of it
 
-  std::cout << "Loading into namespace: " << req.load_namespace << std::endl;
   if (group->init(base_path_, ros::NodeHandle(req.load_namespace)))
   {
-    analyzer_group_->addAnalyzer(group);
-    added_analyzers_.insert(pair<string, boost::shared_ptr<Analyzer> >(req.load_namespace, group));
-    res.message = "successfully added AnalyzerGroup";
+    res.message = "Successfully initialised AnalyzerGroup. Waiting for bond to form.";
     res.success = true;
   }
   else
   {
-    res.message = "failed to initialise AnalyzerGroup";
+    res.message = "Failed to initialise AnalyzerGroup.";
     res.success = false;
+    return false;
   }
+
   return true;
 }
 
