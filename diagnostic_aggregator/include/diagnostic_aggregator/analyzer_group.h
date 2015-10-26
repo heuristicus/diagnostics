@@ -121,14 +121,6 @@ public:
    */
   virtual bool init(const std::string base_path, const ros::NodeHandle &n);
 
-  /*!
-   *\brief Initialized with base path and user-specified namespace rather than
-   * a nodehandle-specified one.
-   *
-   * The parameters in its namespace determine the sub-analyzers.
-   */
-  virtual bool init(const std::string base_path, const std::string namespc);
-
   /**!
    *\brief Add an analyzer to this analyzerGroup
    */

@@ -50,11 +50,6 @@ AnalyzerGroup::AnalyzerGroup() :
   analyzer_loader_("diagnostic_aggregator", "diagnostic_aggregator::Analyzer")
 { }
 
-bool AnalyzerGroup::init(const std::string base_path, const std::string namespc)
-{
-  return init(base_path, ros::NodeHandle(namespc));
-}
-
 bool AnalyzerGroup::init(const string base_path, const ros::NodeHandle &n)
 {
   n.param("path", nice_name_, string(""));
@@ -159,7 +154,7 @@ bool AnalyzerGroup::init(const string base_path, const ros::NodeHandle &n)
   if (analyzers_.size() == 0)
   {
     init_ok = false;
-    ROS_ERROR("No analyzers initialzed in AnalyzerGroup %s", analyzers_nh.getNamespace().c_str());
+    ROS_ERROR("No analyzers initialized in AnalyzerGroup %s", analyzers_nh.getNamespace().c_str());
   }
 
   return init_ok;
