@@ -210,6 +210,12 @@ bool AnalyzerGroup::match(const string name)
   return match_name;
 }
 
+void AnalyzerGroup::resetMatches()
+{
+  matched_.clear();
+}
+
+
 bool AnalyzerGroup::analyze(const boost::shared_ptr<StatusItem> item)
 {
   ROS_ASSERT_MSG(matched_.count(item->getName()), "AnalyzerGroup was asked to analyze an item it hadn't matched.");

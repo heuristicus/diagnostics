@@ -137,6 +137,11 @@ public:
   virtual bool match(const std::string name);
 
   /*!
+   *\brief Clear match arrays. Used when analyzers are added or removed
+   */
+  void resetMatches();
+
+  /*!
    *\brief Analyze returns true if any sub-analyzers will analyze an item
    */
   virtual bool analyze(const boost::shared_ptr<StatusItem> item);

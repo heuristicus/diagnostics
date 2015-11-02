@@ -129,11 +129,13 @@ void Aggregator::bondBroken(string bond_id, boost::shared_ptr<Analyzer> analyzer
   {
     ROS_WARN("Broken bond tried to remove an analyzer which didn't exist.");
   }
+  analyzer_group_->resetMatches();
 }
 
 void Aggregator::bondFormed(boost::shared_ptr<Analyzer> group){
   ROS_DEBUG("Bond formed");
   analyzer_group_->addAnalyzer(group);
+  analyzer_group_->resetMatches();
 }
 
 bool Aggregator::addDiagnostics(diagnostic_msgs::AddDiagnostics::Request &req,
