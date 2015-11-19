@@ -98,9 +98,12 @@ void Aggregator::diagCallback(const diagnostic_msgs::DiagnosticArray::ConstPtr& 
   {
     analyzed = false;
     boost::shared_ptr<StatusItem> item(new StatusItem(&diag_msg->status[j]));
-    if (analyzer_group_->match(item->getName()))
-      analyzed = analyzer_group_->analyze(item);
-
+    { // lock only accesses to analyzer group rather than the whole loop
+      // allows newly added analyzers to kick in as soon as possible
+      boost::mutex::scoped_lock lock(mutex_);
+      if (analyzer_group_->match(item->getName()))
+	analyzed = analyzer_group_->analyze(item);
+    }
     if (!analyzed)
       other_analyzer_->analyze(item);
   }
@@ -129,11 +132,13 @@ void Aggregator::bondBroken(string bond_id, boost::shared_ptr<Analyzer> analyzer
   {
     ROS_WARN("Broken bond tried to remove an analyzer which didn't exist.");
   }
+
   analyzer_group_->resetMatches();
 }
 
 void Aggregator::bondFormed(boost::shared_ptr<Analyzer> group){
   ROS_DEBUG("Bond formed");
+  boost::mutex::scoped_lock lock(mutex_);
   analyzer_group_->addAnalyzer(group);
   analyzer_group_->resetMatches();
 }
@@ -142,21 +147,26 @@ bool Aggregator::addDiagnostics(diagnostic_msgs::AddDiagnostics::Request &req,
 				diagnostic_msgs::AddDiagnostics::Response &res)
 {
   ROS_DEBUG("Got load request for namespace %s", req.load_namespace.c_str());
-  // rebuff attempts to add things from the same namespace twice
-  if (std::find_if(bonds_.begin(), bonds_.end(), BondIDMatch(req.load_namespace)) != bonds_.end()) {
-    res.message = "Requested load from namespace " + req.load_namespace + " which is already in use";
-    res.success = false;
-    return true;
-  }
-
   boost::shared_ptr<Analyzer> group = boost::make_shared<AnalyzerGroup>();
-  boost::shared_ptr<bond::Bond> req_bond = boost::make_shared<bond::Bond>(
-    "/diagnostics_agg/bond", req.load_namespace,
-    boost::function<void(void)>(boost::bind(&Aggregator::bondBroken, this, req.load_namespace, group)),
-    boost::function<void(void)>(boost::bind(&Aggregator::bondFormed, this, group))
-    );
-  req_bond->start();
-  bonds_.push_back(req_bond); // bond formed, keep track of it
+  { // lock here ensures that bonds from the same namespace aren't added twice.
+    // Without it, possibility of two simultaneous calls adding two objects.
+    boost::mutex::scoped_lock lock(mutex_);
+    // rebuff attempts to add things from the same namespace twice
+    if (std::find_if(bonds_.begin(), bonds_.end(), BondIDMatch(req.load_namespace)) != bonds_.end()) {
+      res.message = "Requested load from namespace " + req.load_namespace + " which is already in use";
+      res.success = false;
+      return true;
+    }
+
+    boost::shared_ptr<bond::Bond> req_bond = boost::make_shared<bond::Bond>(
+      "/diagnostics_agg/bond", req.load_namespace,
+      boost::function<void(void)>(boost::bind(&Aggregator::bondBroken, this, req.load_namespace, group)),
+      boost::function<void(void)>(boost::bind(&Aggregator::bondFormed, this, group))
+									    );
+    req_bond->start();
+
+    bonds_.push_back(req_bond); // bond formed, keep track of it
+  }
 
   if (group->init(base_path_, ros::NodeHandle(req.load_namespace)))
   {
@@ -181,8 +191,12 @@ void Aggregator::publishData()
   diag_toplevel_state.name = "toplevel_state";
   diag_toplevel_state.level = -1;
   int min_level = 255;
-
-  vector<boost::shared_ptr<diagnostic_msgs::DiagnosticStatus> > processed = analyzer_group_->report();
+  
+  vector<boost::shared_ptr<diagnostic_msgs::DiagnosticStatus> > processed;
+  {
+    boost::mutex::scoped_lock lock(mutex_);
+    processed = analyzer_group_->report();
+  }
   for (unsigned int i = 0; i < processed.size(); ++i)
   {
     diag_array.status.push_back(*processed[i]);

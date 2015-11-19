@@ -3,15 +3,13 @@ cmake_minimum_required(VERSION 2.8.3)
 project(diagnostic_aggregator)
 
 # Load catkin and all dependencies required for this package
-find_package(catkin REQUIRED diagnostic_msgs pluginlib roscpp rospy rostest xmlrpcpp bondcpp bondpy)
+find_package(catkin REQUIRED diagnostic_msgs pluginlib roscpp rospy rostest xmlrpcpp bondcpp)
 catkin_package(DEPENDS diagnostic_msgs pluginlib roscpp rospy xmlrpcpp bondcpp bondpy
     INCLUDE_DIRS include
     LIBRARIES ${PROJECT_NAME})
 
-find_package(Boost REQUIRED COMPONENTS system regex)
-include_directories(SYSTEM ${Boost_INCLUDE_DIRS})
-
-include_directories(include ${catkin_INCLUDE_DIRS} gtest-1.7.0/include)
+find_package(Boost REQUIRED COMPONENTS system)
+include_directories(include ${catkin_INCLUDE_DIRS} ${Boost_INCLUDE_DIRS} gtest-1.7.0/include)
 
 add_library(${PROJECT_NAME}
   src/status_item.cpp
