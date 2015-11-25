@@ -94,18 +94,20 @@ void Aggregator::diagCallback(const diagnostic_msgs::DiagnosticArray::ConstPtr& 
   checkTimestamp(diag_msg);
 
   bool analyzed = false;
-  for (unsigned int j = 0; j < diag_msg->status.size(); ++j)
-  {
-    analyzed = false;
-    boost::shared_ptr<StatusItem> item(new StatusItem(&diag_msg->status[j]));
-    { // lock only accesses to analyzer group rather than the whole loop
-      // allows newly added analyzers to kick in as soon as possible
-      boost::mutex::scoped_lock lock(mutex_);
+  { // lock the whole loop to ensure nothing in the analyzer group changes
+    // during it.
+    boost::mutex::scoped_lock lock(mutex_);
+    for (unsigned int j = 0; j < diag_msg->status.size(); ++j)
+    {
+      analyzed = false;
+      boost::shared_ptr<StatusItem> item(new StatusItem(&diag_msg->status[j]));
+
       if (analyzer_group_->match(item->getName()))
 	analyzed = analyzer_group_->analyze(item);
+
+      if (!analyzed)
+	other_analyzer_->analyze(item);
     }
-    if (!analyzed)
-      other_analyzer_->analyze(item);
   }
 }
 
