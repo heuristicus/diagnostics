@@ -36,6 +36,7 @@ target_link_libraries(analyzer_loader diagnostic_aggregator)
 
 if(CATKIN_ENABLE_TESTING)
   add_rostest(test/launch/test_agg.launch)
+  add_rostest(test/launch/test_add_agg.launch)
 
   # Test Analyzer loader
   add_rostest(test/launch/test_loader.launch)
