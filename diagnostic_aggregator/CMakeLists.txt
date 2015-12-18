@@ -46,6 +46,10 @@ if(CATKIN_ENABLE_TESTING)
   add_rostest(test/launch/test_multiple_match.launch)
 endif()
 
+catkin_install_python(
+        PROGRAMS scripts/add_analyzers
+        DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
+)
 install(DIRECTORY include/${PROJECT_NAME}/
         DESTINATION ${CATKIN_PACKAGE_INCLUDE_DESTINATION}
 )
