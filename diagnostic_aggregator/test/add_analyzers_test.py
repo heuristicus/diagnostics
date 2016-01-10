@@ -81,7 +81,7 @@ class TestAddAnalyzer(unittest.TestCase):
     def wait_for_agg(self):
         self.agg_msgs = {}
         while not self.agg_msgs and not rospy.is_shutdown():
-            rospy.sleep(rospy.Duration(1))
+            rospy.sleep(rospy.Duration(3))
 
     def test_add_agg(self):
         self.wait_for_agg()
