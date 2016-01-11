@@ -149,12 +149,28 @@ bool Aggregator::addDiagnostics(diagnostic_msgs::AddDiagnostics::Request &req,
 				diagnostic_msgs::AddDiagnostics::Response &res)
 {
   ROS_DEBUG("Got load request for namespace %s", req.load_namespace.c_str());
+  // Don't currently support relative or private namespace definitions
+  std::string error;
+  if (ros::names::validate(req.load_namespace, error))
+  {
+    res.message = error;
+    res.success = false;
+    return true;
+  }
+  else if (req.load_namespace[0] != '/')
+  {
+    res.message = "Requested load from non-global namespace. Private and relative namespaces are not supported.";
+    res.success = false;
+    return true;
+  }
+
   boost::shared_ptr<Analyzer> group = boost::make_shared<AnalyzerGroup>();
   { // lock here ensures that bonds from the same namespace aren't added twice.
     // Without it, possibility of two simultaneous calls adding two objects.
     boost::mutex::scoped_lock lock(mutex_);
     // rebuff attempts to add things from the same namespace twice
-    if (std::find_if(bonds_.begin(), bonds_.end(), BondIDMatch(req.load_namespace)) != bonds_.end()) {
+    if (std::find_if(bonds_.begin(), bonds_.end(), BondIDMatch(req.load_namespace)) != bonds_.end())
+    {
       res.message = "Requested load from namespace " + req.load_namespace + " which is already in use";
       res.success = false;
       return true;
@@ -179,7 +195,7 @@ bool Aggregator::addDiagnostics(diagnostic_msgs::AddDiagnostics::Request &req,
   {
     res.message = "Failed to initialise AnalyzerGroup.";
     res.success = false;
-    return false;
+    return true;
   }
 
   return true;
