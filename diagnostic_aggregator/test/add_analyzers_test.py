@@ -75,8 +75,9 @@ class TestAddAnalyzer(unittest.TestCase):
         self.bond.start()
         rospy.wait_for_service('/diagnostics_agg/add_diagnostics', timeout=10)
         add_diagnostics = rospy.ServiceProxy('/diagnostics_agg/add_diagnostics', AddDiagnostics)
+        print(self.namespace)
         resp = add_diagnostics(load_namespace=self.namespace)
-        self.assert_(resp.success, 'Service call was unsuccessful')
+        self.assert_(resp.success, 'Service call was unsuccessful: {0}'.format(resp.message))
 
     def wait_for_agg(self):
         self.agg_msgs = {}
