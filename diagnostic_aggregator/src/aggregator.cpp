@@ -150,14 +150,7 @@ bool Aggregator::addDiagnostics(diagnostic_msgs::AddDiagnostics::Request &req,
 {
   ROS_DEBUG("Got load request for namespace %s", req.load_namespace.c_str());
   // Don't currently support relative or private namespace definitions
-  std::string error;
-  if (ros::names::validate(req.load_namespace, error))
-  {
-    res.message = error;
-    res.success = false;
-    return true;
-  }
-  else if (req.load_namespace[0] != '/')
+  if (req.load_namespace[0] != '/')
   {
     res.message = "Requested load from non-global namespace. Private and relative namespaces are not supported.";
     res.success = false;
@@ -190,6 +183,7 @@ bool Aggregator::addDiagnostics(diagnostic_msgs::AddDiagnostics::Request &req,
   {
     res.message = "Successfully initialised AnalyzerGroup. Waiting for bond to form.";
     res.success = true;
+    return true;
   }
   else
   {
@@ -197,8 +191,6 @@ bool Aggregator::addDiagnostics(diagnostic_msgs::AddDiagnostics::Request &req,
     res.success = false;
     return true;
   }
-
-  return true;
 }
 
 void Aggregator::publishData()
